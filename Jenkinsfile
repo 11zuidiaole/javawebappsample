@@ -1,38 +1,26 @@
-import groovy.json.JsonSlurper
-
-def getFtpPublishProfile(def publishProfilesJson) {
-  def pubProfiles = new JsonSlurper().parseText(publishProfilesJson)
-  for (p in pubProfiles)
-    if (p['publishMethod'] == 'FTP')
-      return [url: p.publishUrl, username: p.userName, password: p.userPWD]
-}
-
 node {
-  withEnv(['AZURE_SUBSCRIPTION_ID=<subscription_id>',
-        'AZURE_TENANT_ID=<tenant_id>']) {
+  withEnv(['AZURE_SUBSCRIPTION_ID=65590514-3302-45c1-9c14-f22209973f26',
+        'AZURE_TENANT_ID=c8399f5a-3abf-455e-b184-ddbd49543ddf']) {
     stage('init') {
       checkout scm
     }
-  
+
     stage('build') {
       sh 'mvn clean package'
     }
-  
+
     stage('deploy') {
-      def resourceGroup = '<resource_group>'
-      def webAppName = '<app_name>'
+      def resourceGroup = 'jenkins-get-started-rg'
+      def webAppName = 'jiayi-calc-1102'
       // login Azure
-      withCredentials([usernamePassword(credentialsId: '<service_princial>', passwordVariable: 'AZURE_CLIENT_SECRET', usernameVariable: 'AZURE_CLIENT_ID')]) {
-       sh '''
+      withCredentials([usernamePassword(credentialsId: 'AzureServicePrincipal', passwordVariable: 'AZURE_CLIENT_SECRET', usernameVariable: 'AZURE_CLIENT_ID')]) {
+        sh '''
           az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET -t $AZURE_TENANT_ID
           az account set -s $AZURE_SUBSCRIPTION_ID
         '''
       }
-      // get publish settings
-      def pubProfilesJson = sh script: "az webapp deployment list-publishing-profiles -g $resourceGroup -n $webAppName", returnStdout: true
-      def ftpProfile = getFtpPublishProfile pubProfilesJson
       // upload package
-      sh "curl -T target/calculator-1.0.war $ftpProfile.url/webapps/ROOT.war -u '$ftpProfile.username:$ftpProfile.password'"
+      sh "az webapp deploy --resource-group ${resourceGroup} --name ${webAppName} --src-path target/calculator-1.0.war --type war"
       // log out
       sh 'az logout'
     }
